@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+
+<html lang="uk">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Розклад занять</title>
+<style>
+  :root {
+    --bg: #12161c;
+    --panel: #1c222b;
+    --panel-strong: #243041;
+    --border: #2f3b4a;
+    --day-line: #16447d;
+    --text: #e6e6e6;
+    --muted: #a8b8d0;
+    --blue: #7db7ff;
+    --blue-soft: rgba(125, 183, 255, 0.18);
+    --blue-strong: rgba(125, 183, 255, 0.32);
+    --day-bg: rgba(22, 68, 125, 0.28);
+    --lunch-bg: rgba(86, 142, 255, 0.14);
+    --shadow: rgba(0, 0, 0, 0.45);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 10px;
+  }
+
+  .schedule-table-wrap {
+    width: 100%;
+    max-width: 980px;
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: 20px 12px;
+    margin: 0;
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    min-width: 940px;
+  }
+
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 1rem;
+    vertical-align: middle;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease, color 0.25s ease, opacity 0.25s ease;
+  }
+
+  th {
+    background: var(--panel-strong);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .day-label {
+    min-width: 54px;
+    background: #2a3b55;
+    font-weight: 700;
+    color: #dfeafb;
+    border-right: 2px solid var(--day-line);
+  }
+
+  .time-cell {
+    min-width: 160px;
+    color: var(--muted);
+  }
+  .day-row {
+    position: relative;
+  }
+
+  /* Highlight only the day label for the current day; do not tint the whole row */
+  .day-row.active-day .day-label {
+    background: #2c4d7a;
+    color: #ffffff;
+  }
+
+  .day-row.active-lesson .time-cell,
+  .day-row.active-lesson .lesson-cell,
+  .day-row.active-lunch .time-cell,
+  .day-row.active-lunch .lesson-cell {
+    background: var(--blue-soft);
+    box-shadow: inset 0 0 0 1px var(--blue-strong);
+    color: #ffffff;
+  }
+
+  /* Explicit cell-level classes for clearer state separation */
+  .time-cell.active-time {
+    background: var(--blue-soft);
+    box-shadow: inset 0 0 0 1px var(--blue-strong);
+    color: #ffffff;
+  }
+
+  .lesson-cell.active-subject {
+    background: var(--blue-soft);
+    box-shadow: inset 0 0 0 1px var(--blue-strong);
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .day-row.active-lesson .lesson-cell,
+  .day-row.active-lunch .lesson-cell {
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  .lunch-row .time-cell,
+  .lunch-row .lesson-cell,
+  .lunch-row .teacher-cell {
+    background: rgba(125, 183, 255, 0.08);
+  }
+
+  .day-row.active-lunch .time-cell,
+  .day-row.active-lunch .lesson-cell,
+  .day-row.active-lunch .teacher-cell {
+    background: var(--lunch-bg);
+    box-shadow: inset 0 0 0 1px rgba(125, 183, 255, 0.26);
+  }
+
+  .alternating,
+  .alternating-teacher {
+    line-height: 1.5;
+  }
+
+  .alternating .top,
+  .alternating .bottom,
+  .alternating-teacher .top,
+  .alternating-teacher .bottom {
+    display: block;
+    opacity: 0.4;
+    transition: opacity 0.25s ease, color 0.25s ease, font-weight 0.25s ease;
+  }
+
+  /* Alternation: indicate numerator/denominator via text opacity and weight only */
+  .alternating .active,
+  .alternating-teacher .active {
+    opacity: 1;
+    color: inherit;
+    font-weight: 600;
+  }
+
+
+  .zoom-cell {
+    color: var(--blue);
+    font-weight: 600;
+  }
+
+  .zoom-cell a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .zoom-cell a:hover {
+    text-decoration: underline;
+  }
+
+  .teacher-cell {
+    color: var(--text);
+  }
+
+  .zoom-link {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 7px;
+    color: var(--blue);
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .zoom-link:hover {
+    background: var(--blue-soft);
+    color: #ffffff;
+  }
+
+  .zoom-placeholder {
+    color: var(--muted);
+    opacity: 0.75;
+  }
+
+  .empty-cell {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  /* separator between day blocks */
+  .day-separator td {
+    padding: 6px 6px;
+    border: none;
+    background: transparent;
+  }
+
+  .sep-line {
+    height: 3px;
+    background: linear-gradient(90deg, rgba(125,183,255,0.0), var(--day-line), rgba(125,183,255,0.0));
+    border-radius: 3px;
+    box-shadow: 0 2px 8px rgba(22,68,125,0.08);
+    margin: 6px 0;
+  }
+
+  @media (max-width: 620px) {
+    body {
+      padding: 16px 6px;
+    }
+
+    .schedule-table-wrap {
+      padding: 14px 8px;
+    }
+
+    th, td {
+      padding: 8px 6px;
+      font-size: 0.84rem;
+    }
+
+    .time-cell {
+      min-width: 120px;
+    }
+
+    .day-label {
+      min-width: 42px;
+    }
+  }
+
+  .zoom-unavailable {
+    color: var(--muted);
+    opacity: 0.75;
+    cursor: default;
+  }
+</style>
+</head>
+<body>
+<div class="schedule-table-wrap">
+<table>
+<colgroup>
+<col style="width:12%"/>
+<col style="width:18%"/>
+<col style="width:32%"/>
+<col style="width:18%"/>
+<col style="width:20%"/>
+</colgroup>
+<thead>
+<tr>
+<th>ДЕНЬ</th>
+<th>ЧАС</th>
+<th>ПРЕДМЕТ</th>
+<th>ZOOM</th>
+<th>УЧИТЕЛЬ</th>
+</tr>
+</thead>
+<tbody>
+<!-- ПОНЕДІЛОК -->
+<tr class="day-row" data-day="1">
+<td class="day-label" rowspan="7">ПН</td>
+<td class="time-cell">12:00 – 12:35</td>
+<td class="lesson-cell" data-day="1" data-end="12:35" data-index="1" data-start="12:00" data-type="lesson">Алгебра</td>
+<td class="zoom-cell" data-day="1" data-end="12:35" data-start="12:00" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8309595328?pwd=ZU9UZXFlR1JTSFp3UThXYUFhY1kxdz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Максимова Галина Степанівна</span></td>
+</tr>
+<tr class="day-row" data-day="1">
+<td class="time-cell">12:40 – 13:15</td>
+<td class="lesson-cell" data-day="1" data-end="13:15" data-index="2" data-start="12:40" data-type="lesson">Укр мова</td>
+<td class="zoom-cell" data-day="1" data-end="13:15" data-start="12:40" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8500772784?pwd=Z3I1QlhhbUEvLzRYSW1hV2ZUbExUQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Пасько Лада Геннадіївна</span></td>
+</tr>
+<tr class="day-row" data-day="1">
+<td class="time-cell">13:35 – 14:10</td>
+<td class="lesson-cell" data-day="1" data-end="14:10" data-index="3" data-start="13:35" data-type="lesson">Інформатика</td>
+<td class="zoom-cell" data-day="1" data-end="14:10" data-start="13:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/88529881707?pwd=Q0N3OUFjQ21rZkhqc1ZsZ1pVa0ZjQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Шевченко Софія Михайлівна</span></td>
+</tr>
+<tr class="day-row" data-day="1">
+<td class="time-cell">14:30 – 15:05</td>
+<td class="lesson-cell alternating" data-day="1" data-end="15:05" data-index="4" data-start="14:30" data-type="lesson">
+<span class="top">А(I) / Н (I)</span>
+<span class="bottom">А(I) / Н (I)</span>
+</td>
+<td class="zoom-cell" data-day="1" data-end="15:05" data-start="14:30" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/87485194324?pwd=SbC2jmwhaYG2C2ChsWpWaGwR53oSTH.1" rel="noopener noreferrer" target="_blank">Англійська</a><br/><a class="zoom-link" href="https://us04web.zoom.us/j/76012009797?pwd=5QXHRkQPJWR8G2vI4Aa8B1SDowrmCE.1" rel="noopener noreferrer" target="_blank">Німецька</a></td>
+<td class="teacher-cell"><span>Гринцова Наталія Олександрівна</span><br/><span>Воробйова Юлія Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="1">
+<td class="time-cell">15:10 – 15:45</td>
+<td class="lesson-cell" data-day="1" data-end="15:45" data-index="5" data-start="15:10" data-type="lesson">Громад. осв.</td>
+<td class="zoom-cell" data-day="1" data-end="15:45" data-start="15:10" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/2104211325?pwd=TnJWTWZlTzFMTThEZk5JaDNGVUhxZz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Нестеров Дмитро Ігорович</span></td>
+</tr>
+<tr class="day-row" data-day="1">
+<td class="time-cell">15:55 – 16:30</td>
+<td class="lesson-cell" data-day="1" data-end="16:30" data-index="6" data-start="15:55" data-type="lesson">Технології</td>
+<td class="zoom-cell" data-day="1" data-end="16:30" data-start="15:55" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/2330497400?pwd=c1ovVEIrZkV3WklRWTIzWC9IUGZTZz09&amp;omn=79377753716" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Оверчук Наталія Іванівна</span></td>
+</tr>
+<tr class="day-row" data-day="1">
+<td class="time-cell">16:35 – 17:10</td>
+<td class="lesson-cell" data-day="1" data-end="17:10" data-index="7" data-start="16:35" data-type="lesson">Укр літ.</td>
+<td class="zoom-cell" data-day="1" data-end="17:10" data-start="16:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8500772784?pwd=Z3I1QlhhbUEvLzRYSW1hV2ZUbExUQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Пасько Лада Геннадіївна</span></td>
+</tr>
+<tr class="day-separator"><td colspan="5"><div class="sep-line"></div></td></tr>
+<!-- ВІВТОРОК -->
+<tr class="day-row" data-day="2">
+<td class="day-label" rowspan="7">ВТ</td>
+<td class="time-cell">12:00 – 12:35</td>
+<td class="lesson-cell" data-day="2" data-end="12:35" data-index="1" data-start="12:00" data-type="lesson">Хімія</td>
+<td class="zoom-cell" data-day="2" data-end="12:35" data-start="12:00" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/3280515839?pwd=dU5CVm9xNjE0OGJCUWJ0NlZzSnBtQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Бякова Ірина Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="2">
+<td class="time-cell">12:40 – 13:15</td>
+<td class="lesson-cell" data-day="2" data-end="13:15" data-index="2" data-start="12:40" data-type="lesson">Фіз-ра</td>
+<td class="zoom-cell" data-day="2" data-end="13:15" data-start="12:40" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/82741156600?pwd=Ajnkiq4HqIHJxGCxNaT4v2MCTXNhl4.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Єрмакова Олена Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="2">
+<td class="time-cell">13:35 – 14:10</td>
+<td class="lesson-cell" data-day="2" data-end="14:10" data-index="3" data-start="13:35" data-type="lesson">Геометрія</td>
+<td class="zoom-cell" data-day="2" data-end="14:10" data-start="13:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8309595328?pwd=ZU9UZXFlR1JTSFp3UThXYUFhY1kxdz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Максимова Галина Степанівна</span></td>
+</tr>
+<tr class="day-row" data-day="2">
+<td class="time-cell">14:30 – 15:05</td>
+<td class="lesson-cell" data-day="2" data-end="15:05" data-index="4" data-start="14:30" data-type="lesson">Біологія</td>
+<td class="zoom-cell" data-day="2" data-end="15:05" data-start="14:30" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/2914162042?pwd=zjgV8acP8N3G1yilmE7wa2jhDReGb5.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Таркова Марина Дмитрівна</span></td>
+</tr>
+<tr class="day-row" data-day="2">
+<td class="time-cell">15:10 – 15:45</td>
+<td class="lesson-cell" data-day="2" data-end="15:45" data-index="5" data-start="15:10" data-type="lesson">Фізика</td>
+<td class="zoom-cell" data-day="2" data-end="15:45" data-start="15:10" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/72930561810?pwd=3WfribO4y9bByhqYSKeEQGIZBwno51.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Камбуров Олексій Вікторович</span></td>
+</tr>
+<tr class="day-row" data-day="2">
+<td class="time-cell">15:55 – 16:30</td>
+<td class="lesson-cell" data-day="2" data-end="16:30" data-index="6" data-start="15:55" data-type="lesson">Всесв. історія</td>
+<td class="zoom-cell" data-day="2" data-end="16:30" data-start="15:55" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/2104211325?pwd=TnJWTWZlTzFMTThEZk5JaDNGVUhxZz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Нестеров Дмитро Ігорович</span></td>
+</tr>
+<tr class="day-row" data-day="2">
+<td class="time-cell">16:35 – 17:10</td>
+<td class="lesson-cell" data-day="2" data-end="17:10" data-index="7" data-start="16:35" data-type="lesson">А(II) / Н (II)</td>
+<td class="zoom-cell" data-day="2" data-end="17:10" data-start="16:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/87485194324?pwd=SbC2jmwhaYG2C2ChsWpWaGwR53oSTH.1" rel="noopener noreferrer" target="_blank">Англійська</a><br/><a class="zoom-link" href="https://us04web.zoom.us/j/74890060506?pwd=XXzLKGrrtWRwxbkHbbYBZXgX9qHgAy.1" rel="noopener noreferrer" target="_blank">Німецька</a></td>
+<td class="teacher-cell"><span>Гринцова Наталія Олександрівна</span><br/><span>Воробйова Юлія Володимирівна</span></td>
+</tr>
+<tr class="day-separator"><td colspan="5"><div class="sep-line"></div></td></tr>
+<!-- СЕРЕДА -->
+<tr class="day-row" data-day="3">
+<td class="day-label" rowspan="7">СР</td>
+<td class="time-cell">12:00 – 12:35</td>
+<td class="lesson-cell alternating" data-day="3" data-end="12:35" data-index="1" data-start="12:00" data-type="lesson">
+<span class="top">Фінансова грамотність (1,3 тижд.)</span>
+<span class="bottom">ЗБД (2,4 тижд.)</span>
+</td>
+<td class="zoom-cell" data-day="3" data-end="12:35" data-start="12:00" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/72930561810?pwd=3WfribO4y9bByhqYSKeEQGIZBwno51.1" rel="noopener noreferrer" target="_blank">Фін. грамотність</a><br/><a class="zoom-link" href="https://us05web.zoom.us/j/81147682635?pwd=yG11WhnrBp8baCJclHtE0nzbGBfYYU.1" rel="noopener noreferrer" target="_blank">ЗБД</a></td>
+<td class="teacher-cell"><span>Камбуров Олексій Вікторович</span><br/><span>Сліпченко Юрій Васильович</span></td>
+</tr>
+<tr class="day-row" data-day="3">
+<td class="time-cell">12:40 – 13:15</td>
+<td class="lesson-cell" data-day="3" data-end="13:15" data-index="2" data-start="12:40" data-type="lesson">Алгебра</td>
+<td class="zoom-cell" data-day="3" data-end="13:15" data-start="12:40" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8309595328?pwd=ZU9UZXFlR1JTSFp3UThXYUFhY1kxdz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Максимова Галина Степанівна</span></td>
+</tr>
+<tr class="day-row" data-day="3">
+<td class="time-cell">13:35 – 14:10</td>
+<td class="lesson-cell" data-day="3" data-end="14:10" data-index="3" data-start="13:35" data-type="lesson">Мистецтво</td>
+<td class="zoom-cell" data-day="3" data-end="14:10" data-start="13:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/5131985836?pwd=TFFZVnRJazZhSmFGa2ZxQ3BZOTlUQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Кравцова Людмила Петрівна</span></td>
+</tr>
+<tr class="day-row" data-day="3">
+<td class="time-cell">14:30 – 15:05</td>
+<td class="lesson-cell" data-day="3" data-end="15:05" data-index="4" data-start="14:30" data-type="lesson">А(I) / Н (I)</td>
+<td class="zoom-cell" data-day="3" data-end="15:05" data-start="14:30" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/87485194324?pwd=SbC2jmwhaYG2C2ChsWpWaGwR53oSTH.1" rel="noopener noreferrer" target="_blank">Англійська</a><br/><a class="zoom-link" href="https://us04web.zoom.us/j/76012009797?pwd=5QXHRkQPJWR8G2vI4Aa8B1SDowrmCE.1" rel="noopener noreferrer" target="_blank">Німецька</a></td>
+<td class="teacher-cell"><span>Гринцова Наталія Олександрівна</span><br/><span>Воробйова Юлія Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="3">
+<td class="time-cell">15:10 – 15:45</td>
+<td class="lesson-cell" data-day="3" data-end="15:45" data-index="5" data-start="15:10" data-type="lesson">Фіз-ра</td>
+<td class="zoom-cell" data-day="3" data-end="15:45" data-start="15:10" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/82741156600?pwd=Ajnkiq4HqIHJxGCxNaT4v2MCTXNhl4.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Єрмакова Олена Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="3">
+<td class="time-cell">15:55 – 16:30</td>
+<td class="lesson-cell" data-day="3" data-end="16:30" data-index="6" data-start="15:55" data-type="lesson">Географія</td>
+<td class="zoom-cell" data-day="3" data-end="16:30" data-start="15:55" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/82227369805?pwd=JPqON2o4Yc8pKXf7brbVRya9ySTOR9.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Альошина Наталія Миколаївна</span></td>
+</tr>
+<tr class="day-row" data-day="3">
+<td class="time-cell">16:35 – 17:10</td>
+<td class="lesson-cell" data-day="3" data-end="17:10" data-index="7" data-start="16:35" data-type="lesson">Укр мова</td>
+<td class="zoom-cell" data-day="3" data-end="17:10" data-start="16:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8500772784?pwd=Z3I1QlhhbUEvLzRYSW1hV2ZUbExUQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Пасько Лада Геннадіївна</span></td>
+</tr>
+<tr class="day-separator"><td colspan="5"><div class="sep-line"></div></td></tr>
+<!-- ЧЕТВЕР -->
+<tr class="day-row" data-day="4">
+<td class="day-label" rowspan="7">ЧТ</td>
+<td class="time-cell">12:00 – 12:35</td>
+<td class="lesson-cell" data-day="4" data-end="12:35" data-index="1" data-start="12:00" data-type="lesson">Геометрія</td>
+<td class="zoom-cell" data-day="4" data-end="12:35" data-start="12:00" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8309595328?pwd=ZU9UZXFlR1JTSFp3UThXYUFhY1kxdz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Максимова Галина Степанівна</span></td>
+</tr>
+<tr class="day-row" data-day="4">
+<td class="time-cell">12:40 – 13:15</td>
+<td class="lesson-cell alternating" data-day="4" data-end="13:15" data-index="2" data-start="12:40" data-type="lesson">
+<span class="top">Інформатика (1,3 тижд.)</span>
+<span class="bottom">Заруб літ (2,4 тижд.)</span>
+</td>
+<td class="zoom-cell" data-day="4" data-end="13:15" data-start="12:40" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/88529881707?pwd=Q0N3OUFjQ21rZkhqc1ZsZ1pVa0ZjQT09" rel="noopener noreferrer" target="_blank">Інформатика</a><br/><a class="zoom-link" href="https://us05web.zoom.us/j/85929168060?pwd=9tWXbErgL21jDm8hmJGkYaW86oGuU0.1" rel="noopener noreferrer" target="_blank">Заруб. літ.</a></td>
+<td class="teacher-cell"><span>Шевченко Софія Михайлівна</span><br/><span>Святецька Світлана Юріївна</span></td>
+</tr>
+<tr class="day-row" data-day="4">
+<td class="time-cell">13:35 – 14:10</td>
+<td class="lesson-cell" data-day="4" data-end="14:10" data-index="3" data-start="13:35" data-type="lesson">Біологія</td>
+<td class="zoom-cell" data-day="4" data-end="14:10" data-start="13:35" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/2914162042?pwd=zjgV8acP8N3G1yilmE7wa2jhDReGb5.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Таркова Марина Дмитрівна</span></td>
+</tr>
+<tr class="day-row" data-day="4">
+<td class="time-cell">14:30 – 15:05</td>
+<td class="lesson-cell" data-day="4" data-end="15:05" data-index="4" data-start="14:30" data-type="lesson">А(I) / Н (I)</td>
+<td class="zoom-cell" data-day="4" data-end="15:05" data-start="14:30" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/87485194324?pwd=SbC2jmwhaYG2C2ChsWpWaGwR53oSTH.1" rel="noopener noreferrer" target="_blank">Англійська</a><br/><a class="zoom-link" href="https://us04web.zoom.us/j/76012009797?pwd=5QXHRkQPJWR8G2vI4Aa8B1SDowrmCE.1" rel="noopener noreferrer" target="_blank">Німецька</a></td>
+<td class="teacher-cell"><span>Гринцова Наталія Олександрівна</span><br/><span>Воробйова Юлія Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="4">
+<td class="time-cell">15:10 – 15:45</td>
+<td class="lesson-cell" data-day="4" data-end="15:45" data-index="5" data-start="15:10" data-type="lesson">Географія</td>
+<td class="zoom-cell" data-day="4" data-end="15:45" data-start="15:10" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/82227369805?pwd=JPqON2o4Yc8pKXf7brbVRya9ySTOR9.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Альошина Наталія Миколаївна</span></td>
+</tr>
+<tr class="day-row" data-day="4">
+<td class="time-cell">15:55 – 16:30</td>
+<td class="lesson-cell" data-day="4" data-end="16:30" data-index="6" data-start="15:55" data-type="lesson">Фізика</td>
+<td class="zoom-cell" data-day="4" data-end="16:30" data-start="15:55" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/72930561810?pwd=3WfribO4y9bByhqYSKeEQGIZBwno51.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Камбуров Олексій Вікторович</span></td>
+</tr>
+<tr class="day-row" data-day="4">
+<td class="time-cell">16:35 – 17:10</td>
+<td class="lesson-cell" data-day="4" data-end="17:10" data-index="7" data-start="16:35" data-type="lesson">Хімія</td>
+<td class="zoom-cell" data-day="4" data-end="17:10" data-start="16:35" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/3280515839?pwd=dU5CVm9xNjE0OGJCUWJ0NlZzSnBtQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Бякова Ірина Володимирівна</span></td>
+</tr>
+<tr class="day-separator"><td colspan="5"><div class="sep-line"></div></td></tr>
+<!-- ПʼЯТНИЦЯ -->
+<tr class="day-row" data-day="5">
+<td class="day-label" rowspan="7">ПТ</td>
+<td class="time-cell">12:00 – 12:35</td>
+<td class="lesson-cell" data-day="5" data-end="12:35" data-index="1" data-start="12:00" data-type="lesson">Алгебра</td>
+<td class="zoom-cell" data-day="5" data-end="12:35" data-start="12:00" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8309595328?pwd=ZU9UZXFlR1JTSFp3UThXYUFhY1kxdz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Максимова Галина Степанівна</span></td>
+</tr>
+<tr class="day-row" data-day="5">
+<td class="time-cell">12:40 – 13:15</td>
+<td class="lesson-cell" data-day="5" data-end="13:15" data-index="2" data-start="12:40" data-type="lesson">Укр мова</td>
+<td class="zoom-cell" data-day="5" data-end="13:15" data-start="12:40" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8500772784?pwd=Z3I1QlhhbUEvLzRYSW1hV2ZUbExUQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Пасько Лада Геннадіївна</span></td>
+</tr>
+<tr class="day-row" data-day="5">
+<td class="time-cell">13:35 – 14:10</td>
+<td class="lesson-cell" data-day="5" data-end="14:10" data-index="3" data-start="13:35" data-type="lesson">А(II) / Н (II)</td>
+<td class="zoom-cell" data-day="5" data-end="14:10" data-start="13:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/87485194324?pwd=SbC2jmwhaYG2C2ChsWpWaGwR53oSTH.1" rel="noopener noreferrer" target="_blank">Англійська</a><br/><a class="zoom-link" href="https://us04web.zoom.us/j/74890060506?pwd=XXzLKGrrtWRwxbkHbbYBZXgX9qHgAy.1" rel="noopener noreferrer" target="_blank">Німецька</a></td>
+<td class="teacher-cell"><span>Гринцова Наталія Олександрівна</span><br/><span>Воробйова Юлія Володимирівна</span></td>
+</tr>
+<tr class="day-row" data-day="5">
+<td class="time-cell">14:30 – 15:05</td>
+<td class="lesson-cell" data-day="5" data-end="15:05" data-index="4" data-start="14:30" data-type="lesson">Історія Укр</td>
+<td class="zoom-cell" data-day="5" data-end="15:05" data-start="14:30" data-type="teacher"><a class="zoom-link" href="https://us04web.zoom.us/j/2104211325?pwd=TnJWTWZlTzFMTThEZk5JaDNGVUhxZz09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Нестеров Дмитро Ігорович</span></td>
+</tr>
+<tr class="day-row" data-day="5">
+<td class="time-cell">15:10 – 15:45</td>
+<td class="lesson-cell" data-day="5" data-end="15:45" data-index="5" data-start="15:10" data-type="lesson">Укр літ</td>
+<td class="zoom-cell" data-day="5" data-end="15:45" data-start="15:10" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/8500772784?pwd=Z3I1QlhhbUEvLzRYSW1hV2ZUbExUQT09" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Пасько Лада Геннадіївна</span></td>
+</tr>
+<tr class="day-row" data-day="5">
+<td class="time-cell">15:55 – 16:30</td>
+<td class="lesson-cell" data-day="5" data-end="16:30" data-index="6" data-start="15:55" data-type="lesson">Заруб літ</td>
+<td class="zoom-cell" data-day="5" data-end="16:30" data-start="15:55" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/85929168060?pwd=9tWXbErgL21jDm8hmJGkYaW86oGuU0.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Святецька Світлана Юріївна</span></td>
+</tr>
+<tr class="day-row" data-day="5">
+<td class="time-cell">16:35 – 17:10</td>
+<td class="lesson-cell" data-day="5" data-end="17:10" data-index="7" data-start="16:35" data-type="lesson">Фіз-ра</td>
+<td class="zoom-cell" data-day="5" data-end="17:10" data-start="16:35" data-type="teacher"><a class="zoom-link" href="https://us05web.zoom.us/j/82741156600?pwd=Ajnkiq4HqIHJxGCxNaT4v2MCTXNhl4.1" rel="noopener noreferrer" target="_blank">Увійти</a></td>
+<td class="teacher-cell"><span>Єрмакова Олена Володимирівна</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+<script>
+  function _base_toMinutes(time) {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  function _base_isDenominatorWeek() {
+    // Вкажи дату першого 1-го тижня навчання, якщо потрібно точно
+    // синхронізувати чергування 1,3 / 2,4 тижнів.
+    const start = new Date(2026, 8, 1);
+    const now = new Date();
+    const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+    const weeks = Math.floor(diffDays / 7);
+    return weeks % 2 !== 0;
+  }
+
+  function _base_currentDayIndex() {
+    const day = new Date().getDay();
+    if (day === 0 || day === 6) {
+      return null;
+    }
+    return day;
+  }
+
+  function getCurrentMinutes() {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+
+  function updateAlternation() {
+    const denominator = _base_isDenominatorWeek();
+
+    document.querySelectorAll('.alternating, .alternating-teacher').forEach(cell => {
+      const top = cell.querySelector('.top');
+      const bottom = cell.querySelector('.bottom');
+      if (!top || !bottom) return;
+
+      top.classList.remove('active');
+      bottom.classList.remove('active');
+
+      if (denominator) {
+        bottom.classList.add('active');
+      } else {
+        top.classList.add('active');
+      }
+    });
+  }
+
+  function updateSchedule() {
+    const dayIndex = _base_currentDayIndex();
+    const currentMinutes = getCurrentMinutes();
+
+    document.querySelectorAll('.day-row').forEach(row => {
+      row.classList.remove('active-day', 'active-lesson', 'active-lunch');
+    });
+    document.querySelectorAll('.time-cell.active-time').forEach(c => c.classList.remove('active-time'));
+    document.querySelectorAll('.lesson-cell.active-subject').forEach(c => c.classList.remove('active-subject'));
+
+    if (!dayIndex) return;
+
+    const currentDayRows = document.querySelectorAll('.day-row[data-day="' + dayIndex + '"]');
+    currentDayRows.forEach(row => {
+      row.classList.add('active-day');
+    });
+
+    let activeRow = null;
+
+    currentDayRows.forEach(row => {
+      let start = row.dataset.start;
+      let end = row.dataset.end;
+      if ((!start || !end)) {
+        const lessonCell = row.querySelector('.lesson-cell');
+        if (lessonCell) {
+          start = lessonCell.dataset.start;
+          end = lessonCell.dataset.end;
+        }
+      }
+      if (!start || !end) return;
+
+      const startMinutes = _base_toMinutes(start);
+      const endMinutes = _base_toMinutes(end);
+
+      if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+        activeRow = row;
+      }
+    });
+
+    if (activeRow) {
+      if (activeRow.dataset.type === 'lunch') {
+        activeRow.classList.add('active-lunch');
+      } else {
+        activeRow.classList.add('active-lesson');
+        const timeCell = activeRow.querySelector('.time-cell');
+        const lessonCell = activeRow.querySelector('.lesson-cell');
+        if (timeCell) timeCell.classList.add('active-time');
+        if (lessonCell) lessonCell.classList.add('active-subject');
+      }
+    }
+  }
+
+  updateAlternation();
+  updateSchedule();
+  setInterval(() => {
+    updateAlternation();
+    updateSchedule();
+  }, 30000);
+</script>
+</body>
+</html>
